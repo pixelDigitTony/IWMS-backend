@@ -9,17 +9,13 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "app_user")
-public class AppUserEntity {
+@Table(name = "user_info")
+public class UserInfoEntity {
 
     @Id
     private UUID id;
 
-    @Column(nullable = false, unique = true)
-    private String email;
-
-    @Column(name = "display_name")
-    private String displayName;
+    // Email and display name are stored in auth.users; not duplicated here
 
     @Column(name = "supabase_user_id", unique = true)
     private UUID supabaseUserId;
@@ -36,11 +32,7 @@ public class AppUserEntity {
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
 
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
-
-    public String getDisplayName() { return displayName; }
-    public void setDisplayName(String displayName) { this.displayName = displayName; }
+    // No email/displayName fields here
 
     public UUID getSupabaseUserId() { return supabaseUserId; }
     public void setSupabaseUserId(UUID supabaseUserId) { this.supabaseUserId = supabaseUserId; }

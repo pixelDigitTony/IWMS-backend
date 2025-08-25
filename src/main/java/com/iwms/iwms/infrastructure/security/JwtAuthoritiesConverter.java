@@ -18,7 +18,7 @@ public class JwtAuthoritiesConverter implements Converter<Jwt, Collection<Grante
     public Collection<GrantedAuthority> convert(Jwt jwt) {
         List<GrantedAuthority> authorities = new ArrayList<>();
 
-        // permissions: ["users.manage", "attachments.upload", ...]
+        // permissions claim can be in app_metadata or user_metadata depending on setup
         Object permsClaim = jwt.getClaim("permissions");
         if (permsClaim instanceof Collection<?> perms) {
             authorities.addAll(perms.stream()
@@ -28,7 +28,7 @@ public class JwtAuthoritiesConverter implements Converter<Jwt, Collection<Grante
                 .collect(Collectors.toList()));
         }
 
-        // roles: ["SUPER_ADMIN", "ORG_ADMIN", ...] → ROLE_* format
+        // roles claim
         Object rolesClaim = jwt.getClaim("roles");
         if (rolesClaim instanceof Collection<?> roles) {
             authorities.addAll(roles.stream()

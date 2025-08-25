@@ -2,7 +2,6 @@ package com.iwms.iwms.app.controller;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,48 +14,53 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.iwms.iwms.infrastructure.persistence.jpa.entity.AppUserEntity;
-import com.iwms.iwms.infrastructure.persistence.jpa.repository.AppUserRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 
 @RestController
 @RequestMapping("/admin")
 public class AdminController {
 
-    private final AppUserRepository users;
-
-    public AdminController(AppUserRepository users) {
-        this.users = users;
-    }
+    @PersistenceContext
+    private EntityManager em;
 
     record PendingUserDto(UUID id, String email) {}
 
-    private boolean requireSuperAdmin(Jwt jwt) {
-        return users.findBySupabaseUserId(UUID.fromString(jwt.getSubject()))
-            .map(AppUserEntity::isSuperAdmin)
-            .orElse(false);
+    private boolean isSuperAdmin(UUID userId) {
+        Object result = em.createNativeQuery(
+            "select coalesce((raw_app_meta_data->>'is_super_admin')::boolean, false) from auth.users where id = :id")
+            .setParameter("id", userId)
+            .getSingleResult();
+        return result != null && (Boolean) result;
     }
 
     @GetMapping("/pending-users")
     public ResponseEntity<?> pendingUsers(@AuthenticationPrincipal Jwt jwt) {
-        if (!requireSuperAdmin(jwt)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        List<PendingUserDto> list = users.findAll().stream()
-            .filter(u -> !u.isApproved())
-            .map(u -> new PendingUserDto(u.getId(), u.getEmail()))
-            .collect(Collectors.toList());
+        UUID me = UUID.fromString(jwt.getSubject());
+        if (!isSuperAdmin(me)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = em.createNativeQuery(
+            "select id, email from auth.users where coalesce((raw_app_meta_data->>'approved')::boolean, false) = false order by created_at desc")
+            .getResultList();
+
+        List<PendingUserDto> list = rows.stream()
+            .map(r -> new PendingUserDto((UUID) r[0], (String) r[1]))
+            .toList();
         return ResponseEntity.ok(list);
     }
 
     @PostMapping("/pending-users/{id}/approve")
     @Transactional
     public ResponseEntity<?> approve(@PathVariable("id") UUID id, @AuthenticationPrincipal Jwt jwt) {
-        if (!requireSuperAdmin(jwt)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        return users.findById(id)
-            .map(u -> {
-                u.setApproved(true);
-                users.save(u);
-                return ResponseEntity.ok().build();
-            })
-            .orElse(ResponseEntity.notFound().build());
+        UUID me = UUID.fromString(jwt.getSubject());
+        if (!isSuperAdmin(me)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+
+        int updated = em.createNativeQuery(
+            "update auth.users set raw_app_meta_data = raw_app_meta_data || jsonb_build_object('approved', true) where id = :id")
+            .setParameter("id", id)
+            .executeUpdate();
+        return updated == 1 ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
     }
 }
 
