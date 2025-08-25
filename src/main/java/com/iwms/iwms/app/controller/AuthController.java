@@ -1,25 +1,27 @@
 package com.iwms.iwms.app.controller;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
+import com.iwms.iwms.infrastructure.persistence.jpa.entity.UserInfoEntity;
+import com.iwms.iwms.infrastructure.persistence.jpa.repository.UserInfoRepository;
 
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
 
-    @PersistenceContext
-    private EntityManager em;
+    private final UserInfoRepository userInfoRepository;
+
+    public AuthController(UserInfoRepository userInfoRepository) {
+        this.userInfoRepository = userInfoRepository;
+    }
 
     record StatusResponse(boolean approved, boolean superAdmin) {}
 
@@ -27,20 +29,15 @@ public class AuthController {
     public ResponseEntity<StatusResponse> status(@AuthenticationPrincipal Jwt jwt) {
         UUID userId = UUID.fromString(jwt.getSubject());
 
-        // Read flags from auth.users.raw_app_meta_data
-        Object[] row = (Object[]) em.createNativeQuery(
-            "select coalesce((raw_app_meta_data->>'approved')::boolean, false), " +
-            "coalesce((raw_app_meta_data->>'is_super_admin')::boolean, false) " +
-            "from auth.users where id = :id")
-            .setParameter("id", userId)
-            .getSingleResult();
+        Optional<UserInfoEntity> userInfo = userInfoRepository.findBySupabaseUserId(userId);
+        if (userInfo.isEmpty()) {
+            return ResponseEntity.ok(new StatusResponse(false, false));
+        }
 
-        boolean approved = row != null && row[0] != null ? (Boolean) row[0] : false;
-        boolean superAdmin = row != null && row[1] != null ? (Boolean) row[1] : false;
-        return ResponseEntity.ok(new StatusResponse(approved, superAdmin));
+        UserInfoEntity user = userInfo.get();
+        return ResponseEntity.ok(new StatusResponse(user.isApproved(), user.isSuperAdmin()));
     }
 
-    
 }
 
 
