@@ -1,7 +1,8 @@
-package com.iwms.iwms.infrastructure.persistence.jpa.entity;
+package com.iwms.iwms.domain.model;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import org.hibernate.annotations.Immutable;
 
@@ -27,6 +28,9 @@ public class SupabaseUserEntity {
     @Column(name = "last_sign_in_at")
     private OffsetDateTime lastSignInAt;
 
+    @Column(name = "raw_user_meta_data", columnDefinition = "jsonb")
+    private JsonNode rawUserMetaData;
+
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
 
@@ -38,6 +42,16 @@ public class SupabaseUserEntity {
 
     public OffsetDateTime getLastSignInAt() { return lastSignInAt; }
     public void setLastSignInAt(OffsetDateTime lastSignInAt) { this.lastSignInAt = lastSignInAt; }
+
+    public JsonNode getRawUserMetaData() { return rawUserMetaData; }
+    public void setRawUserMetaData(JsonNode rawUserMetaData) { this.rawUserMetaData = rawUserMetaData; }
+
+    public String getDisplayName() {
+        if (rawUserMetaData != null && rawUserMetaData.has("display_name")) {
+            return rawUserMetaData.get("display_name").asText();
+        }
+        return null;
+    }
 }
 
 

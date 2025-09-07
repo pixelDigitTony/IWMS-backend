@@ -17,6 +17,9 @@ import org.springframework.web.bind.annotation.RestController;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
+import com.iwms.iwms.domain.model.UserInfoEntity;
+import com.iwms.iwms.domain.repository.UserInfoRepository;
+
 @RestController
 @RequestMapping("/admin")
 public class AdminController {
@@ -24,14 +27,18 @@ public class AdminController {
     @PersistenceContext
     private EntityManager em;
 
+    private final UserInfoRepository userInfoRepository;
+
+    public AdminController(UserInfoRepository userInfoRepository) {
+        this.userInfoRepository = userInfoRepository;
+    }
+
     record PendingUserDto(UUID id, String email) {}
 
     private boolean isSuperAdmin(UUID userId) {
-        Object result = em.createNativeQuery(
-            "select coalesce((raw_app_meta_data->>'is_super_admin')::boolean, false) from auth.users where id = :id")
-            .setParameter("id", userId)
-            .getSingleResult();
-        return result != null && (Boolean) result;
+        return userInfoRepository.findBySupabaseUserId(userId)
+            .map(UserInfoEntity::isSuperAdmin)
+            .orElse(false);
     }
 
     @GetMapping("/pending-users")

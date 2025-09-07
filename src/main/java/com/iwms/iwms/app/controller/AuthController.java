@@ -1,7 +1,9 @@
 package com.iwms.iwms.app.controller;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -10,8 +12,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.iwms.iwms.infrastructure.persistence.jpa.entity.UserInfoEntity;
-import com.iwms.iwms.infrastructure.persistence.jpa.repository.UserInfoRepository;
+import com.iwms.iwms.domain.model.UserInfoEntity;
+import com.iwms.iwms.domain.repository.UserInfoRepository;
 
 @RestController
 @RequestMapping("/auth")
@@ -23,7 +25,7 @@ public class AuthController {
         this.userInfoRepository = userInfoRepository;
     }
 
-    record StatusResponse(boolean approved, boolean superAdmin) {}
+    record StatusResponse(boolean approved, Set<String> roles) {}
 
     @GetMapping("/status")
     public ResponseEntity<StatusResponse> status(@AuthenticationPrincipal Jwt jwt) {
@@ -31,11 +33,14 @@ public class AuthController {
 
         Optional<UserInfoEntity> userInfo = userInfoRepository.findBySupabaseUserId(userId);
         if (userInfo.isEmpty()) {
-            return ResponseEntity.ok(new StatusResponse(false, false));
+            return ResponseEntity.ok(new StatusResponse(false, Set.of()));
         }
 
         UserInfoEntity user = userInfo.get();
-        return ResponseEntity.ok(new StatusResponse(user.isApproved(), user.isSuperAdmin()));
+        Set<String> roleNames = user.getRoles() != null ?
+            user.getRoles().stream().map(Enum::name).collect(Collectors.toSet()) :
+            Set.of();
+        return ResponseEntity.ok(new StatusResponse(user.isApproved(), roleNames));
     }
 
 }
