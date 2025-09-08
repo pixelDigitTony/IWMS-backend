@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.hibernate.annotations.Immutable;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -29,6 +30,7 @@ public class SupabaseUserEntity {
     private OffsetDateTime lastSignInAt;
 
     @Column(name = "raw_user_meta_data", columnDefinition = "jsonb")
+    @Convert(converter = JsonNodeConverter.class)
     private JsonNode rawUserMetaData;
 
     public UUID getId() { return id; }
