@@ -14,31 +14,34 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
-
 import com.iwms.iwms.domain.model.UserInfoEntity;
+import com.iwms.iwms.domain.model.SupabaseUserEntity;
 import com.iwms.iwms.domain.repository.UserInfoRepository;
+import com.iwms.iwms.domain.repository.SupabaseUserRepository;
 
 @RestController
 @RequestMapping("/admin")
 public class AdminController {
 
-    @PersistenceContext
-    private EntityManager em;
-
     private final UserInfoRepository userInfoRepository;
+    private final SupabaseUserRepository supabaseUserRepository;
 
-    public AdminController(UserInfoRepository userInfoRepository) {
+    public AdminController(UserInfoRepository userInfoRepository, SupabaseUserRepository supabaseUserRepository) {
         this.userInfoRepository = userInfoRepository;
+        this.supabaseUserRepository = supabaseUserRepository;
     }
 
     record PendingUserDto(UUID id, String email) {}
 
     private boolean isSuperAdmin(UUID userId) {
-        return userInfoRepository.findBySupabaseUserId(userId)
-            .map(UserInfoEntity::isSuperAdmin)
-            .orElse(false);
+        var userInfo = userInfoRepository.findBySupabaseUserId(userId);
+        if (userInfo.isEmpty()) {
+            return false;
+        }
+        
+        var user = userInfo.get();
+        boolean isSuperAdmin = user.isSuperAdmin();
+        return isSuperAdmin;
     }
 
     @GetMapping("/pending-users")
@@ -46,14 +49,24 @@ public class AdminController {
         UUID me = UUID.fromString(jwt.getSubject());
         if (!isSuperAdmin(me)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 
-        @SuppressWarnings("unchecked")
-        List<Object[]> rows = em.createNativeQuery(
-            "select id, email from auth.users where coalesce((raw_app_meta_data->>'approved')::boolean, false) = false order by created_at desc")
-            .getResultList();
-
-        List<PendingUserDto> list = rows.stream()
-            .map(r -> new PendingUserDto((UUID) r[0], (String) r[1]))
+        // Get all user_info records where approved = false
+        List<UserInfoEntity> pendingUsers = userInfoRepository.findAll().stream()
+            .filter(user -> !user.isApproved())
             .toList();
+
+        // Map to DTOs with email from Supabase users
+        List<PendingUserDto> list = pendingUsers.stream()
+            .map(user -> {
+                String email = null;
+                if (user.getSupabaseUserId() != null) {
+                    email = supabaseUserRepository.findById(user.getSupabaseUserId())
+                        .map(SupabaseUserEntity::getEmail)
+                        .orElse("Unknown");
+                }
+                return new PendingUserDto(user.getId(), email);
+            })
+            .toList();
+        
         return ResponseEntity.ok(list);
     }
 
@@ -63,11 +76,18 @@ public class AdminController {
         UUID me = UUID.fromString(jwt.getSubject());
         if (!isSuperAdmin(me)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 
-        int updated = em.createNativeQuery(
-            "update auth.users set raw_app_meta_data = raw_app_meta_data || jsonb_build_object('approved', true) where id = :id")
-            .setParameter("id", id)
-            .executeUpdate();
-        return updated == 1 ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
+        // Find the user_info record by ID
+        var userInfo = userInfoRepository.findById(id);
+        if (userInfo.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        // Update the approval status
+        var user = userInfo.get();
+        user.setApproved(true);
+        userInfoRepository.save(user);
+
+        return ResponseEntity.ok().build();
     }
 }
 

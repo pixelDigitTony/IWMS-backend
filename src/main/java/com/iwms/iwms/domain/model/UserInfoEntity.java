@@ -6,8 +6,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import com.iwms.iwms.domain.auth.Privilege;
-import com.iwms.iwms.domain.auth.Role;
+import com.iwms.iwms.domain.model.auth.Privilege;
+import com.iwms.iwms.domain.model.auth.Role;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -61,8 +61,48 @@ public class UserInfoEntity {
     public Set<Role> getRoles() {
         if (rolesArray == null) return Set.of();
         return Arrays.stream(rolesArray)
-                .map(Role::valueOf)
+                .<Role>map(this::parseRole)
+                .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toSet());
+    }
+    
+    private Role parseRole(String roleString) {
+        if (roleString == null || roleString.trim().isEmpty()) {
+            return null;
+        }
+        
+        try {
+            // First try to parse as plain enum value
+            return Role.valueOf(roleString.trim());
+        } catch (IllegalArgumentException e) {
+            // If that fails, try to parse as JSON and extract the role
+            try {
+                if (roleString.trim().startsWith("{") && roleString.trim().endsWith("}")) {
+                    // It's a JSON object, try to extract the role value
+                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                    com.fasterxml.jackson.databind.JsonNode jsonNode = mapper.readTree(roleString);
+                    
+                    // Look for common JSON structures
+                    String roleValue = null;
+                    if (jsonNode.has("role")) {
+                        roleValue = jsonNode.get("role").asText();
+                    } else if (jsonNode.has("name")) {
+                        roleValue = jsonNode.get("name").asText();
+                    } else if (jsonNode.isTextual()) {
+                        roleValue = jsonNode.asText();
+                    }
+                    
+                    if (roleValue != null && !roleValue.trim().isEmpty()) {
+                        return Role.valueOf(roleValue.trim());
+                    }
+                }
+            } catch (Exception jsonException) {
+                // JSON parsing failed, ignore
+            }
+            
+            // If all parsing attempts fail, return null (will be filtered out)
+            return null;
+        }
     }
 
     public void setRoles(Set<Role> roles) {
@@ -76,7 +116,7 @@ public class UserInfoEntity {
     }
 
     public boolean isSuperAdmin() {
-        return rolesArray != null && Arrays.asList(rolesArray).contains(Role.SUPER_ADMIN.name());
+        return getRoles().contains(Role.SUPER_ADMIN);
     }
 
     public Set<String> getPrivileges() {

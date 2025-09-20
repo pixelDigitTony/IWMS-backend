@@ -1,4 +1,4 @@
-package com.iwms.iwms.domain.auth;
+package com.iwms.iwms.domain.model.auth;
 
 /**
  * Access scope for authorization checks and data filtering.

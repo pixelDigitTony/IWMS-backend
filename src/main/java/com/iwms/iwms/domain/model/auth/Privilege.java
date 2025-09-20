@@ -1,4 +1,4 @@
-package com.iwms.iwms.domain.auth;
+package com.iwms.iwms.domain.model.auth;
 
 /**
  * Fine-grained permissions for actions. Expressed as authority strings.

@@ -1,4 +1,4 @@
-package com.iwms.iwms.domain.auth;
+package com.iwms.iwms.domain.model.auth;
 
 /**
  * System roles used for coarse-grained authorization and UI gating.
