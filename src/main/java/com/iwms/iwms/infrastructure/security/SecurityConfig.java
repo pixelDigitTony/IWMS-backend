@@ -23,11 +23,22 @@ import org.springframework.security.oauth2.server.resource.web.DefaultBearerToke
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+import com.iwms.iwms.domain.repository.UserInfoRepository;
+import com.iwms.iwms.domain.repository.SupabaseUserRepository;
+
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
 
     private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
+
+    private final UserInfoRepository userInfoRepository;
+    private final SupabaseUserRepository supabaseUserRepository;
+
+    public SecurityConfig(UserInfoRepository userInfoRepository, SupabaseUserRepository supabaseUserRepository) {
+        this.userInfoRepository = userInfoRepository;
+        this.supabaseUserRepository = supabaseUserRepository;
+    }
 
     @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri:}")
     private String jwkSetUri;
@@ -38,11 +49,9 @@ public class SecurityConfig {
     @Value("${app.security.jwt-debug-log:false}")
     private boolean jwtDebugEnabled;
 
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        JwtAuthenticationConverter jwtConverter = new JwtAuthenticationConverter();
-        jwtConverter.setJwtGrantedAuthoritiesConverter(new JwtAuthoritiesConverter());
-
         http
             .cors(Customizer.withDefaults())
             .csrf(csrf -> csrf.disable())
@@ -57,7 +66,7 @@ public class SecurityConfig {
                 .bearerTokenResolver(bearerTokenResolver())
                 .jwt(jwt -> jwt
                     .decoder(jwtDecoder())
-                    .jwtAuthenticationConverter(jwtConverter)
+                    .jwtAuthenticationConverter(new DatabaseEnrichedJwtAuthenticationConverter(userInfoRepository, supabaseUserRepository))
                 )
             );
 
